@@ -135,7 +135,7 @@ docker push todoappiz.azurecr.io/todo-app
 
 ---
 
-## 4. Déploiement sur Azure App Service for Containers
+## 4. Déploiement sur Azure App Service for Containers (le problème a été fix)
 
 ### Objectif
 
