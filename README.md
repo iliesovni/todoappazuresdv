@@ -31,7 +31,7 @@ L’application permet les fonctionnalités suivantes :
 
 Les données sont stockées localement dans un fichier JSON.
 
-### ▶Lancer l’application en local
+### Lancer l’application en local
 
 ```bash
 npm init -y
