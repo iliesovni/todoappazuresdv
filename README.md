@@ -348,7 +348,7 @@ Utiliser un stockage objet pour stocker des fichiers liés à l’application.
 
 ```bash
 az storage account create \
-  --name todostorage \
+  --name todostorageacciz \
   --resource-group todo-test-iz \
   --location PolandCentral \
   --sku Standard_LRS
@@ -361,7 +361,7 @@ az storage account create \
 ```bash
 az storage container create \
   --name todo-container \
-  --account-name todostorage
+  --account-name todostorageacciz
 ```
 
 ---
@@ -370,10 +370,10 @@ az storage container create \
 
 ```bash
 az storage blob upload \
-  --account-name todostorageaccount \
+  --account-name todostorageacciz \
   --container-name todo-container \
-  --name test.txt \
-  --file test.txt
+  --name app.js \
+  --file app.js
 ```
 
 ---
@@ -402,6 +402,18 @@ az webapp deployment slot create \
   --resource-group todo-test-iz \
   --slot staging
 ```
+
+Erreur : les droits doivent être redonnés au staging afin qu'il puisse avoir accès à l'ACR :
+
+```bash
+az webapp identity assign --name todo-app-iz --resource-group todo-test-iz --slot staging
+
+az role assignment create --assignee $(az webapp identity show --name todo-app-iz --resource-group todo-test-iz --slot staging --query principalId --output tsv) --scope /subscriptions/64b49246-8ac5-4b69-8842-bd62ea73128d/resourceGroups/todo-test-iz/providers/Microsoft.ContainerRegistry/registries/todoappiz --role AcrPull
+
+az webapp restart --name todo-app-iz --resource-group todo-test-iz --slot staging
+```
+
+cette action à été faite à plusieurs reprise mais j'ai oublié où exactement (pour le app service de base notamment).
 
 ---
 
@@ -446,10 +458,12 @@ Adapter les ressources de l’application en fonction de la charge.
 
 ```bash
 az appservice plan update \
-  --name plan-todo-app \
-  --resource-group todo-rg \
+  --name todoappizserv \
+  --resource-group todo-test-iz \
   --number-of-workers 2
 ```
+
+scaling horizontal.
 
 ---
 
@@ -475,8 +489,8 @@ Le scaling manuel permet :
 
 ```bash
 az appservice plan update \
-  --name plan-todo-app \
-  --resource-group todo-rg \
+  --name todoappizserv \
+  --resource-group todo-test-iz \
   --number-of-workers 1
 ```
 
@@ -489,5 +503,9 @@ az appservice plan update \
 * Application fonctionnelle en local
 * Image Docker créée
 * Image stockée dans Azure Container Registry
-* Application web fonctionnelle
+* Application deployée et accessible via azure app service (https://todo-app-iz.azurewebsites.net/)
 * CosmosDB Fonctionnel
+* Sécurisation des secrets via Azure Key Vault
+* Utilisation d’Azure Blob Storage pour le stockage de fichiers
+* Mise en place d’un environnement de staging avec deployment slot
+* Mise en place du scaling (horizontal) manuel (augmentation et réduction du nombre d’instances)
