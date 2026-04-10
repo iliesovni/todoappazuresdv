@@ -135,6 +135,93 @@ docker push todoappiz.azurecr.io/todo-app
 
 ---
 
+## 4. Déploiement sur Azure App Service for Containers
+
+### Objectif
+
+Déployer l’image Docker stockée dans Azure Container Registry (ACR) sur un service web accessible publiquement via Azure App Service.
+
+---
+
+### Problème rencontré
+
+Lors de la création du **App Service Plan**, une erreur de type *throttling* a été rencontrée :
+
+```bash
+App Service Plan Create operation is throttled for subscription...
+```
+
+Ce problème est lié à une limitation de la souscription Azure (souvent sur les comptes étudiants ou les environnements de test), empêchant temporairement la création de nouvelles ressources.
+
+Le App Service Plan étant obligatoire (il représente les ressources de calcul : CPU/RAM), il n’est pas possible de finaliser le déploiement sans celui-ci.
+
+---
+
+### Commandes utilisées
+
+#### Création du App Service Plan
+
+```bash
+az appservice plan create \
+  --name todoappizserv \
+  --resource-group todo-test-iz \
+  --location francecentral \
+  --sku B1 \
+  --is-linux
+```
+
+Résultat : échec dû à une limitation Azure (*throttling*).
+
+---
+
+#### Commande prévue pour créer l’App Service
+
+```bash
+az webapp create \
+  --resource-group todo-test-iz \
+  --plan todoappizserv \
+  --name todo-app-iz \
+  --deployment-container-image-name todoappiz.azurecr.io/todo-app
+```
+
+---
+
+### Analyse
+
+* Le déploiement sur Azure App Service a besoins obligatoirement :
+
+  * un **App Service Plan**
+
+* L’erreur rencontrée est externe au projet (limitation Azure) et non liée à une erreur de configuration.
+
+---
+
+### Solutions envisagées
+
+les solutions trouvées :
+
+* Attendre la levée du throttling Azure : en cours
+* Changer de région (ex : `westeurope`) : beaucoup de régions inaccessibles pour cause de réstrictions par azure
+* Utiliser un SKU gratuit (`F1`) : même problème
+* Créer les ressources via le portail Azure : même problème
+
+---
+
+### État actuel
+
+* Image Docker disponible dans ACR
+* Déploiement App Service non finalisé (blocage App Service Plan)
+
+---
+
+### Conclusion
+
+Le déploiement est prêt d’un point de vue technique, mais bloqué par une contrainte de la plateforme Azure.
+
+Dès que la ressource App Service Plan pourra être créée, l’application pourra être déployée et rendue accessible publiquement.
+
+---
+
 ## Résultat
 
 À ce stade :
