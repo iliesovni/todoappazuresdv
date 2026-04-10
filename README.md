@@ -161,6 +161,8 @@ Le App Service Plan étant obligatoire (il représente les ressources de calcul 
 
 #### Création du App Service Plan
 
+commande non fonctionnelle :
+
 ```bash
 az appservice plan create \
   --name todoappizserv \
@@ -170,7 +172,18 @@ az appservice plan create \
   --is-linux
 ```
 
-Résultat : échec dû à une limitation Azure (*throttling*).
+commande fonctionnelle :
+
+```bash
+az appservice plan create \
+  --name todoappizserv \
+  --resource-group todo-test-iz \
+  --location polandcentral \
+  --sku B1 \
+  --is-linux
+```
+
+Résultat : échec dû à une limitation Azure (*throttling*) avant de fonctionner maintenant avec les serveurs pologne.
 
 ---
 
@@ -181,7 +194,7 @@ az webapp create \
   --resource-group todo-test-iz \
   --plan todoappizserv \
   --name todo-app-iz \
-  --deployment-container-image-name todoappiz.azurecr.io/todo-app
+  --deployment-container-image-name todoappiz.azurecr.io/todo-app:latest
 ```
 
 ---
@@ -196,29 +209,276 @@ az webapp create \
 
 ---
 
-### Solutions envisagées
+### Solutions envisagées (fonctionne)
 
 les solutions trouvées :
 
-* Attendre la levée du throttling Azure : en cours
-* Changer de région (ex : `westeurope`) : beaucoup de régions inaccessibles pour cause de réstrictions par azure
-* Utiliser un SKU gratuit (`F1`) : même problème
-* Créer les ressources via le portail Azure : même problème
+* Attendre la levée du throttling Azure : n'a pas fonctionné
+* Changer de région (ex : `westeurope`) : beaucoup de régions ne fonctionnent pas mais pologne centre a fini par fonctionner
+* Utiliser un SKU gratuit (`F1`) : n'a pas fonctionné
+* Créer les ressources via le portail Azure : n'a pas fonctionné
 
 ---
 
-### État actuel
+## 4.5 Persistance avec Azure Cosmos DB
 
-* Image Docker disponible dans ACR
-* Déploiement App Service non finalisé (blocage App Service Plan)
+### Objectif
+
+Remplacer le stockage local (fichier JSON) par une base de données cloud NoSQL avec Azure Cosmos DB afin d’assurer la persistance des données.
 
 ---
 
-### Conclusion
+### Création de Cosmos DB
 
-Le déploiement est prêt d’un point de vue technique, mais bloqué par une contrainte de la plateforme Azure.
+```bash
+az cosmosdb create \
+  --name todocosmosizdb \
+  --resource-group todo-test-iz \
+  --kind MongoDB
+```
 
-Dès que la ressource App Service Plan pourra être créée, l’application pourra être déployée et rendue accessible publiquement.
+---
+
+### Création de la base et collection
+
+```bash
+az cosmosdb mongodb database create \
+  --account-name todocosmosizdb \
+  --resource-group todo-test-iz \
+  --name tododb
+```
+
+```bash
+az cosmosdb mongodb collection create \
+  --account-name todocosmosizdb \
+  --resource-group todo-test-iz \
+  --database-name tododb \
+  --name tasks
+```
+
+---
+
+### Connexion à l’application
+
+L’application Node.js est modifiée pour utiliser la chaîne de connexion Cosmos DB via variable d’environnement.
+
+```bash
+az cosmosdb keys list \
+  --name todocosmosizdb \
+  --resource-group todo-test-iz
+```
+
+---
+
+### Résultat
+
+* Les tâches sont stockées dans Cosmos DB
+* Les données persistent après redémarrage
+
+---
+
+## 4.6 Sécurisation avec Azure Key Vault et Identité Managée
+
+### Objectif
+
+Sécuriser les informations sensibles (ex : chaîne de connexion) avec Azure Key Vault.
+
+---
+
+### Création du Key Vault
+
+```bash
+az keyvault create \
+  --name todo-keyvault-iz \
+  --resource-group todo-test-iz \
+  --location PolandCentral
+```
+
+---
+
+### Ajout d’un secret
+
+```bash
+az keyvault secret set \
+  --vault-name todo-keyvault-iz \
+  --name CosmosConnectionString \
+  --value "connection-string"
+```
+
+---
+
+### Activation de l’identité managée
+
+```bash
+az webapp identity assign \
+  --name todo-app-iz \
+  --resource-group todo-test-iz
+```
+
+---
+
+### Attribution des droits
+
+```bash
+az role assignment create \
+  --role "Key Vault Secrets Officer" \
+  --assignee 8ef0261e-c21f-40b4-9096-4e891fc53df3 \
+  --scope /subscriptions/64b49246-8ac5-4b69-8842-bd62ea73128d/resourceGroups/todo-test-iz/providers/Microsoft.KeyVault/vaults/todo-keyvault-iz
+```
+
+---
+
+### Résultat
+
+* Les secrets ne sont plus stockés en clair
+* Accès sécurisé via identité managée
+* Bonnes pratiques de sécurité respectées
+
+---
+
+## 4.7 Utilisation d’Azure Blob Storage
+
+### Objectif
+
+Utiliser un stockage objet pour stocker des fichiers liés à l’application.
+
+---
+
+### Création du Storage Account
+
+```bash
+az storage account create \
+  --name todostorage \
+  --resource-group todo-test-iz \
+  --location PolandCentral \
+  --sku Standard_LRS
+```
+
+---
+
+### Création d’un container
+
+```bash
+az storage container create \
+  --name todo-container \
+  --account-name todostorage
+```
+
+---
+
+### Upload d’un fichier
+
+```bash
+az storage blob upload \
+  --account-name todostorageaccount \
+  --container-name todo-container \
+  --name test.txt \
+  --file test.txt
+```
+
+---
+
+### Résultat
+
+* Stockage d’objets fonctionnel
+* Fichiers accessibles via URL
+* Possibilité d’associer fichiers aux tâches
+
+---
+
+## 4.8 Multi-environnement avec Deployment Slot
+
+### Objectif
+
+Mettre en place un environnement de staging pour tester avant mise en production.
+
+---
+
+### Création du slot
+
+```bash
+az webapp deployment slot create \
+  --name todo-app-iz \
+  --resource-group todo-test-iz \
+  --slot staging
+```
+
+---
+
+### Swap staging vers production
+
+```bash
+az webapp deployment slot swap \
+  --name todo-app-iz \
+  --resource-group todo-test-iz \
+  --slot staging
+```
+
+---
+
+### Résultat
+
+* Environnement de staging disponible
+* Déploiement sans interruption
+* Meilleure gestion des mises à jour
+
+---
+
+### Intérêt
+
+Le deployment slot permet de :
+
+* tester une version sans impacter les utilisateurs
+* effectuer des déploiements sans downtime
+* sécuriser les mises en production
+
+---
+
+## 4.9 Scaling manuel
+
+### Objectif
+
+Adapter les ressources de l’application en fonction de la charge.
+
+---
+
+### Modification du nombre d’instances
+
+```bash
+az appservice plan update \
+  --name plan-todo-app \
+  --resource-group todo-rg \
+  --number-of-workers 2
+```
+
+---
+
+### Résultat
+
+* Augmentation du nombre d’instances
+* Meilleure gestion de la charge
+* Haute disponibilité améliorée
+
+---
+
+### Intérêt
+
+Le scaling manuel permet :
+
+* d’absorber une montée en charge
+* d’améliorer la disponibilité
+* d’adapter les coûts aux besoins
+
+---
+
+### Retour à une configuration normale
+
+```bash
+az appservice plan update \
+  --name plan-todo-app \
+  --resource-group todo-rg \
+  --number-of-workers 1
+```
 
 ---
 
@@ -229,20 +489,5 @@ Dès que la ressource App Service Plan pourra être créée, l’application pou
 * Application fonctionnelle en local
 * Image Docker créée
 * Image stockée dans Azure Container Registry
-
----
-
-## Prochaines étapes
-
-* Déploiement sur Azure App Service
-* Connexion à une base de données (Cosmos DB)
-* Sécurisation avec Azure Key Vault
-* Ajout de stockage Blob
-
----
-
-## Remarques
-
-* L’application utilise un stockage local (non persistant en cloud)
-
----
+* Application web fonctionnelle
+* CosmosDB Fonctionnel
